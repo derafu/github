@@ -41,11 +41,18 @@ final class WorkflowRunHandler
 
         $branch = $payload->workflow_run->head_branch;
         $workflow = $payload->workflow->name;
+        $event = $payload->workflow_run->event;
         $status = $payload->workflow_run->status;
         $conclusion = $payload->workflow_run->conclusion;
 
-        $httpUri = sprintf('https://github.com/%s.git', $payload->repository->name);
-        $gitUri = sprintf('git@github.com:%s.git', $payload->repository->name);
+        $httpUri = sprintf(
+            'https://github.com/%s.git',
+            $payload->repository->full_name
+        );
+        $gitUri = sprintf(
+            'git@github.com:%s.git',
+            $payload->repository->full_name
+        );
 
         foreach ($sites as $site => $config) {
             if (is_string($config)) {
@@ -60,6 +67,7 @@ final class WorkflowRunHandler
                 ($httpUri === $siteRepository || $gitUri === $siteRepository)
                 && $branch === $siteBranch
                 && $workflow === $siteWorkflow
+                && $event === 'push'
                 && $status === 'completed'
                 && $conclusion === 'success'
             ) {
