@@ -63,6 +63,7 @@ final class WorkflowRunHandler
         $deployerBin = $deployerDir . '/vendor/bin/dep';
         $deployerFile = $deployerDir . '/deploy.php';
         $sites = require $deployerDir . '/sites.php';
+        $logFile = '/var/log/deployer.log';
 
         // Search the site that matches the workflow run repository, and others
         // criteria, and deploy it.
@@ -93,6 +94,11 @@ final class WorkflowRunHandler
                     escapeshellarg($deployerBin),
                     escapeshellarg($deployerFile),
                     escapeshellarg($site)
+                );
+                $command = sprintf(
+                    'echo "%s >> %s 2>&1" | at now',
+                    $command,
+                    escapeshellarg($logFile)
                 );
 
                 $output = [];
