@@ -32,13 +32,12 @@ final class WorkflowRunHandler
      * @param Notification $notification The notification object containing the
      * workflow run data.
      * @param string $deployerDir The path to the deployer directory.
-     * @return ?Response The response of the deployment command or null if no
-     * deployment is executed.
+     * @return Response The response of the deployment command.
      */
     public static function deploy(
         Notification $notification,
         ?string $deployerDir = null
-    ): ?Response {
+    ): Response {
         // Get the workflow run data.
         $workflowRun = $notification->getPayload()->workflow_run;
         $httpsUri = sprintf(
@@ -118,6 +117,9 @@ final class WorkflowRunHandler
             }
         }
 
-        return null;
+        return new Response([
+            'code' => 202,
+            'data' => 'No site matched for this workflow run.',
+        ]);
     }
 }
