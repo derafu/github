@@ -118,7 +118,8 @@ final class WorkflowRunHandler
         }
 
         return new Response([
-            'code' => 202,
+            'code' => 0,
+            'http_code' => 202,
             'data' => 'No site matched for this workflow run.',
         ]);
     }
