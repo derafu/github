@@ -48,37 +48,39 @@ git clone https://github.com/derafu/github.git
 
 declare(strict_types=1);
 
+namespace Derafu\GitHub\Webhook;
+
+use Derafu\GitHub\Logger;
 use Derafu\GitHub\Webhook\Handler;
 use Derafu\GitHub\Webhook\Response;
 use Exception;
 
-// Load the autoloader
+// Load the autoloader.
 require 'vendor/autoload.php';
 
-// Load configuration
+// Load configuration.
 $config = require 'config.php';
 
-// Create the handler
-$handler = new Handler($config['secret'], $config['hash_id']);
-foreach ($config['handlers'] as $event => $closure) {
-    $handler->addHandler($event, $closure);
-}
+// Create the handler.
+$logger = new Logger();
+$handler = new Handler($config, $logger);
 
-// Handle the webhook
+// Handle the webhook.
 try {
     $notification = $handler->handle();
     $response = $notification->getResponse();
 } catch (Exception $e) {
     $response = new Response([
-        'code' => $e->getCode() ?: 400,
+        'code' => $e->getCode() ?: 1,
         'data' => [
             'message' => $e->getMessage(),
+            'logs' => $logger->getLogs(),
         ],
     ]);
 }
 
-// Send the response
-http_response_code($response->getCode());
+// Send the response.
+http_response_code($response->getHttpCode());
 header('Content-Type: application/json');
 echo json_encode($response->toArray(), JSON_PRETTY_PRINT);
 ```
@@ -94,25 +96,12 @@ declare(strict_types=1);
 use Derafu\GitHub\Webhook\EventHandler\WorkflowRunHandler;
 use Derafu\GitHub\Webhook\Notification;
 
-// Load site-specific configurations
-$DEPLOYER_DIR = realpath('/home/admin/deployer');
-$dep = $DEPLOYER_DIR . '/vendor/bin/dep';
-$sites = require $DEPLOYER_DIR . '/sites.php';
-
-// Return the configuration
 return [
-    'secret' => getenv('GITHUB_WEBHOOK_SECRET') ?: throw new RuntimeException(
-        'Environment variable GITHUB_WEBHOOK_SECRET is not set.'
-    ),
-    'hash_id' => getenv('GITHUB_WEBHOOK_HASH_ID') ?: null,
+    // Add handlers for different events.
     'handlers' => [
-        // Add handlers for different events
         'workflow_run' => fn (Notification $notification) => WorkflowRunHandler::deploy(
-            $notification,
-            $dep,
-            $sites
+            $notification
         ),
-        // Add more handlers as needed
     ],
 ];
 ```
