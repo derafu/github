@@ -21,12 +21,25 @@ use RuntimeException;
 final class Response implements JsonSerializable
 {
     /**
-     * The code of the response.
+     * The success code of the response.
      *
      * @var int
      */
-    private const CODE_SUCCESS = 200;
+    private const CODE_SUCCESS = 0;
 
+    /**
+     * The default success code of the HTTP response.
+     *
+     * @var int
+     */
+    private const HTTP_CODE_SUCCESS = 200;
+
+    /**
+     * The default error code of the HTTP response.
+     *
+     * @var int
+     */
+    private const HTTP_CODE_ERROR = 400;
     /**
      * The status of the response.
      *
@@ -42,12 +55,36 @@ final class Response implements JsonSerializable
     private const STATUS_ERROR = 'error';
 
     /**
+     * The data of the response.
+     *
+     * @var array
+     */
+    private array $response;
+
+    /**
      * Constructs the response.
      *
-     * @param string|array $data The data of the response.
+     * @param string|array $response The response.
      */
-    public function __construct(private readonly string|array $data)
+    public function __construct(string|array $response)
     {
+        // If the response is a string, convert it to an array where the string
+        // is the value of the key 'data'.
+        if (is_string($response)) {
+            $response = [
+                'data' => $response,
+            ];
+        }
+
+        // If the response is an array, check that the key 'data' exists.
+        if (!isset($response['data'])) {
+            throw new RuntimeException(
+                'Key "data" is required in the response when is an array.'
+            );
+        }
+
+        // Set the response.
+        $this->response = $response;
     }
 
     /**
@@ -57,7 +94,7 @@ final class Response implements JsonSerializable
      */
     public function getData(): string|array
     {
-        return $this->data;
+        return $this->response['data'];
     }
 
     /**
@@ -67,11 +104,23 @@ final class Response implements JsonSerializable
      */
     public function getCode(): int
     {
-        if (is_array($this->data)) {
-            return $this->data['code'] ?? self::CODE_SUCCESS;
-        }
+        return $this->response['code'] ?? self::CODE_SUCCESS;
+    }
 
-        return self::CODE_SUCCESS;
+    /**
+     * Gets the HTTP code of the response.
+     *
+     * @return int The HTTP code of the response.
+     */
+    public function getHttpCode(): int
+    {
+        return $this->response['http_code']
+            ?? (
+                $this->getCode() === self::CODE_SUCCESS
+                    ? self::HTTP_CODE_SUCCESS
+                    : self::HTTP_CODE_ERROR
+            )
+        ;
     }
 
     /**
@@ -81,17 +130,13 @@ final class Response implements JsonSerializable
      */
     public function getStatus(): string
     {
-        if (is_array($this->data)) {
-            return $this->data['status']
-                ?? (
-                    $this->getCode() === self::CODE_SUCCESS
-                        ? self::STATUS_SUCCESS
-                        : self::STATUS_ERROR
-                )
-            ;
-        }
-
-        return self::STATUS_SUCCESS;
+        return $this->response['status']
+            ?? (
+                $this->getCode() === self::CODE_SUCCESS
+                    ? self::STATUS_SUCCESS
+                    : self::STATUS_ERROR
+            )
+        ;
     }
 
     /**
@@ -101,18 +146,11 @@ final class Response implements JsonSerializable
      */
     public function toArray(): array
     {
-        $data = is_string($this->data)
-            ? ['message' => $this->data]
-            : (is_array($this->data) && isset($this->data['data'])
-                ? $this->data['data']
-                : throw new RuntimeException('Key "data" is required.')
-            )
-        ;
-
         return [
             'code' => $this->getCode(),
+            'http_code' => $this->getHttpCode(),
             'status' => $this->getStatus(),
-            'data' => $data,
+            'data' => $this->getData(),
         ];
     }
 

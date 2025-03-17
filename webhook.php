@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Derafu\GitHub\Webhook;
 
+use Derafu\GitHub\Logger;
 use Derafu\GitHub\Webhook\Handler;
 use Derafu\GitHub\Webhook\Response;
 use Exception;
@@ -23,10 +24,8 @@ require 'vendor/autoload.php';
 $config = require 'config.php';
 
 // Create the handler.
-$handler = new Handler($config['secret'], $config['hash_id']);
-foreach ($config['handlers'] as $event => $closure) {
-    $handler->addHandler($event, $closure);
-}
+$logger = new Logger();
+$handler = new Handler($config, $logger);
 
 // Handle the webhook.
 try {
@@ -34,14 +33,15 @@ try {
     $response = $notification->getResponse();
 } catch (Exception $e) {
     $response = new Response([
-        'code' => $e->getCode() ?: 400,
+        'code' => $e->getCode() ?: 1,
         'data' => [
             'message' => $e->getMessage(),
+            'logs' => $logger->getLogs(),
         ],
     ]);
 }
 
 // Send the response.
-http_response_code($response->getCode());
+http_response_code($response->getHttpCode());
 header('Content-Type: application/json');
 echo json_encode($response->toArray(), JSON_PRETTY_PRINT);

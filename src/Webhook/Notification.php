@@ -68,56 +68,39 @@ final class Notification
     }
 
     /**
-     * Validates the webhook notification.
+     * Gets the raw data of the webhook notification.
      *
-     * @param string $secret The secret of the webhook notification.
-     * @param string|null $hashId The hash ID of the webhook notification.
-     * @param string $algorithm The algorithm of the webhook notification.
-     *
-     * @throws RuntimeException If the webhook notification is invalid.
+     * @return string The raw data of the webhook notification.
      */
-    public function validate(
-        string $secret,
-        ?string $hashId = null,
-        string $algorithm = 'sha256'
-    ): void {
-        // Validate hash ID, must match if provided for validation.
-        if ($hashId !== null && $this->config['hash_id'] !== $hashId) {
-            throw new RuntimeException('Invalid hash ID (hash_id).');
-        }
+    public function getData(): string
+    {
+        return $this->data;
+    }
 
-        // Validate request method, must be POST.
-        if ($this->config['REQUEST_METHOD'] !== 'POST') {
-            throw new RuntimeException(sprintf(
-                'Invalid request method %s, only POST is allowed.',
-                $this->config['REQUEST_METHOD']
-            ));
-        }
+    /**
+     * Gets the hash ID of the webhook notification.
+     *
+     * @return string|null The hash ID of the webhook notification.
+     */
+    public function getHashId(): ?string
+    {
+        return $this->config['hash_id'];
+    }
 
-        // Validate event, must be set.
-        if (empty($this->config['HTTP_X_GITHUB_EVENT'])) {
-            throw new RuntimeException(
-                'Missing GitHub event (HTTP_X_GITHUB_EVENT).'
-            );
-        }
-
-        // Validate signature, must be set.
-        $signature = $this->config['HTTP_X_HUB_SIGNATURE_256'] ?? null;
-        if (empty($signature)) {
-            throw new RuntimeException(
-                'Missing GitHub signature (HTTP_X_HUB_SIGNATURE_256).'
-            );
-        }
-
-        // Validate signature, must match.
-        $calculatedSignature = $algorithm . '='
-            . hash_hmac($algorithm, $this->data, $secret)
+    /**
+     * Gets the request method of the webhook notification.
+     *
+     * @return string The request method of the webhook notification.
+     *
+     * @throws RuntimeException If the request method is missing.
+     */
+    public function getRequestMethod(): string
+    {
+        return $this->config['REQUEST_METHOD']
+            ?? throw new RuntimeException(
+                'Missing request method (REQUEST_METHOD).'
+            )
         ;
-        if (!hash_equals($signature, $calculatedSignature)) {
-            throw new RuntimeException(
-                'Invalid GitHub signature (HTTP_X_HUB_SIGNATURE_256).'
-            );
-        }
     }
 
     /**
@@ -130,7 +113,9 @@ final class Notification
     public function getEvent(): string
     {
         return $this->config['HTTP_X_GITHUB_EVENT']
-            ?? throw new RuntimeException('Missing GitHub event (HTTP_X_GITHUB_EVENT).')
+            ?? throw new RuntimeException(
+                'Missing GitHub event (HTTP_X_GITHUB_EVENT).'
+            )
         ;
     }
 
@@ -144,8 +129,54 @@ final class Notification
     public function getDeliveryId(): string
     {
         return $this->config['HTTP_X_GITHUB_DELIVERY']
-            ?? throw new RuntimeException('Missing GitHub delivery (HTTP_X_GITHUB_DELIVERY).')
+            ?? throw new RuntimeException(
+                'Missing GitHub delivery (HTTP_X_GITHUB_DELIVERY).'
+            )
         ;
+    }
+
+    /**
+     * Gets the signature header of the webhook notification.
+     *
+     * @return string The signature header of the webhook notification.
+     *
+     * @throws RuntimeException If the signature header is missing.
+     */
+    public function getSignatureHeader(): string
+    {
+        return $this->config['HTTP_X_HUB_SIGNATURE_256']
+            ?? throw new RuntimeException(
+                'Missing GitHub signature (HTTP_X_HUB_SIGNATURE_256).'
+            )
+        ;
+    }
+
+    /**
+     * Gets the signature algorithm of the webhook notification.
+     *
+     * @return string The signature algorithm of the webhook notification.
+     *
+     * @throws RuntimeException If the signature algorithm is missing.
+     */
+    public function getSignatureAlgorithm(): string
+    {
+        [$algorithm, $signature] = explode('=', $this->getSignatureHeader());
+
+        return $algorithm;
+    }
+
+    /**
+     * Gets the signature value of the webhook notification.
+     *
+     * @return string The signature value of the webhook notification.
+     *
+     * @throws RuntimeException If the signature is missing.
+     */
+    public function getSignatureValue(): string
+    {
+        [$algorithm, $signature] = explode('=', $this->getSignatureHeader());
+
+        return $signature;
     }
 
     /**

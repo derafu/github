@@ -14,6 +14,8 @@ namespace Derafu\GitHub\Webhook;
 
 use Closure;
 use RuntimeException;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 /**
  * Class for handling GitHub webhooks.
@@ -23,6 +25,18 @@ use RuntimeException;
 final class Handler
 {
     /**
+     * The configuration of the webhook notification.
+     *
+     * Keys:
+     *
+     *   - secret: The secret configured in GitHub (required).
+     *   - hash_id: The Hash ID for additional check in $_GET['hash_id'].
+     *
+     * @var array
+     */
+    private array $config;
+
+    /**
      * The handlers for the events.
      *
      * @var array<string,Closure>
@@ -30,15 +44,47 @@ final class Handler
     private array $handlers = [];
 
     /**
+     * The logger.
+     *
+     * @var LoggerInterface
+     */
+    private LoggerInterface $logger;
+
+    /**
      * Constructor.
      *
-     * @param string $secret The secret configured in GitHub.
-     * @param string $token The Hash ID for additional check in $_GET['hash_id'].
+     * @param string|array $config The configuration of the webhook notification.
+     * @param LoggerInterface|null $logger The logger.
      */
     public function __construct(
-        private readonly string $secret,
-        private readonly ?string $hashId = null
+        string|array $config,
+        ?LoggerInterface $logger = null
     ) {
+        if (is_string($config)) {
+            $config = [
+                'secret' => $config,
+            ];
+        }
+
+        $config = array_merge([
+            'secret' => getenv('GITHUB_WEBHOOK_SECRET') ?: null,
+            'hash_id' => getenv('GITHUB_WEBHOOK_HASH_ID') ?: null,
+            'handlers' => [],
+        ], $config);
+
+        if ($config['secret'] === null) {
+            throw new RuntimeException(
+                'Environment variable GITHUB_WEBHOOK_SECRET is not set. Set it or provide the secret in the config.'
+            );
+        }
+
+        $this->config = $config;
+
+        foreach ($config['handlers'] ?? [] as $event => $closure) {
+            $this->addHandler($event, $closure);
+        }
+
+        $this->logger = $logger ?? new NullLogger();
     }
 
     /**
@@ -65,13 +111,75 @@ final class Handler
      */
     public function handle(?string $data = null, ?array $config = null): Notification
     {
-        $notification = new Notification($data, $config);
+        $notification = new Notification($data, $config, $this->logger);
 
-        $notification->validate($this->secret, $this->hashId);
+        $this->validate($notification);
 
         $this->process($notification);
 
         return $notification;
+    }
+
+    /**
+     * Validates the notification.
+     *
+     * @param Notification $notification The notification to validate.
+     * @param string $algorithm The algorithm of the webhook notification.
+     */
+    public function validate(Notification $notification): void
+    {
+        // Validate hash ID, must match if provided for validation.
+        $hashId = $this->config['hash_id'];
+        if ($hashId !== null && $notification->getHashId() !== $hashId) {
+            throw new RuntimeException('Invalid hash ID (hash_id).');
+        }
+
+        // Validate request method, must be POST.
+        if ($notification->getRequestMethod() !== 'POST') {
+            throw new RuntimeException(sprintf(
+                'Invalid request method %s, only POST is allowed.',
+                $notification->getRequestMethod()
+            ));
+        }
+
+        // Validate event, must be set.
+        if (empty($notification->getEvent())) {
+            throw new RuntimeException(
+                'Missing GitHub event (HTTP_X_GITHUB_EVENT).'
+            );
+        }
+
+        // Validate signature, must match.
+        // $secret = $this->config['secret'];
+        // $algorithm = $notification->getSignatureAlgorithm();
+        // $notificationSignature = $notification->getSignatureValue();
+        // $data = json_encode($notification->getPayload());
+        // $calculatedSignature = hash_hmac($algorithm, $data, $secret);
+        // $this->logger->debug(sprintf(
+        //     'Calculated signature: %s',
+        //     $calculatedSignature
+        // ));
+        // $this->logger->debug(sprintf(
+        //     'Notification signature: %s',
+        //     $notificationSignature
+        // ));
+        // $this->logger->debug(sprintf(
+        //     'Notification payload: %s',
+        //     $data
+        // ));
+        // $this->logger->debug(sprintf(
+        //     'Notification algorithm: %s',
+        //     $algorithm
+        // ));
+        // $this->logger->debug(sprintf(
+        //     'Notification secret: %s',
+        //     $secret
+        // ));
+        // if (!hash_equals($notificationSignature, $calculatedSignature)) {
+        //     throw new RuntimeException(
+        //         'Invalid GitHub signature (HTTP_X_HUB_SIGNATURE_256).'
+        //     );
+        // }
     }
 
     /**
